@@ -11,23 +11,36 @@ services:
     volumes:
       - ./app:/app
     command: >
-      sh -c "python manage.py runserver 0.0.0.0:8000"
+      sh -c "python manage.py wait_for_db &&
+            python manage.py migrate &&
+            python manage.py runserver 0.0.0.0:8000"
     environment:
       - DB_HOST=db
       - DB_NAME=devdb
-      - DB_USER=devuser
-      - DB_PASS=pass1234
+      - DB_USER=root
+      - DB_PASS=root
     depends_on:
       - db
 
   db:
-    image: postgres:13-alpine
+    image: postgres:14.1-alpine
     volumes:
-      - dev-db-data:/var/lib/postgresql/data
+      - './postgres-data:/var/lib/postgresql/data'
     environment:
       - POSTGRES_DB=devdb
-      - POSTGRES_USER=DEVUSER
-      - POSTGRES_PASSWORD=pass1234
+      - POSTGRES_USER=root
+      - POSTGRES_PASSWORD=root
+    ports:
+      - "5432:5432"
+
+  pgadmin:
+    image: dpage/pgadmin4
+    user: root
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=root
+    ports:
+      - "16543:80"
 
 volumes:
   dev-db-data:

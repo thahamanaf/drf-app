@@ -3,6 +3,8 @@ Tests for models.
 """
 from django.test import TestCase
 from django.contrib.auth import get_user_model
+from decimal import Decimal
+from core import models
 
 
 class ModelTests(TestCase):
@@ -46,3 +48,21 @@ class ModelTests(TestCase):
         )
         self.assertTrue(user.is_superuser)
         self.assertTrue(user.is_staff)
+
+    def test_create_reciepe(self):
+        """test creaitng a recipe in success"""
+
+        user = get_user_model().objects.create_user(
+            'test@examlpe.com',
+            'pass1234'
+        )
+
+        receipe = models.Recipe.objects.create(
+            user=user,
+            title='sample recipe name',
+            time_minitues=5,
+            price=Decimal('5.50'),
+            description='sample description'
+        )
+
+        self.assertEqual(str(receipe), receipe.title)

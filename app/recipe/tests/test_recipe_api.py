@@ -10,6 +10,9 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from core.models import Recipe, Tag, Ingredient
 from recipe.serializers import RecipeSerializer, RecipeDetailSerializer
+import tempfile
+import os
+from PIL import Image
 
 RECIPE_URL = reverse('recipe:recipe-list')
 
@@ -17,6 +20,9 @@ def detail_url(recipe_id):
     """create and return a recipe detail url"""
     return reverse('recipe:recipe-detail', args=[recipe_id])
 
+def image_upload_url(recipe_id):
+    """create and return image upload url"""
+    return reverse('recipe:recipe-upload-image', args=[recipe_id])
 
 def create_recipe(user, **params):
     """crate and return recipe"""
@@ -321,6 +327,98 @@ class PrivateRecipeAPITest(TestCase):
             user=self.user
             ).exists()
             self.assertTrue(exists)
+
+    def test_craete_ingredient_update(self):
+        """"tets creating an ingredient when updating a recipe"""
+
+        recipe = create_recipe(user=self.user)
+
+        payload = {
+            "ingredients": [{"name": "Limes"}]
+        }
+        url = detail_url(recipe.id)
+        res = self.client.patch(url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        new_ingredient = Ingredient.objects.get(user=self.user, name="Limes")
+        self.assertIn(new_ingredient, recipe.ingredients.all())
+
+    def test_update_recipe_assign_ingredient(self):
+        """test assigining an exisitng ingredient when updating recipe"""
+
+        ing1 = Ingredient.objects.create(user=self.user, name="pepper")
+        recipe = create_recipe(user=self.user)
+        recipe.ingredients.add(ing1)
+
+        ing2 = Ingredient.objects.create(user=self.user, name="chulli")
+        payload = {
+            "ingredients": [{"name": "chulli"}]
+        }
+        url=detail_url(recipe.id)
+        res=self.client.patch(url, payload, format="json")
+
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn(ing2, recipe.ingredients.all())
+        self.assertNotIn(ing1, recipe.ingredients.all())
+
+    def test_clear_recipe_ingeredients(self):
+        """test clearing a recipe ingredient"""
+
+        ingredient = Ingredient.objects.create(user=self.user, name="haasd")
+        recipe = create_recipe(user=self.user)
+        recipe.ingredients.add(ingredient)
+
+        payload = {
+            "ingredients": []
+        }
+        url = detail_url(recipe.id)
+        res = self.client.patch(url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+
+        self.assertEqual(recipe.ingredients.count(), 0)
+
+class ImageUploadTest(TestCase):
+    """test for image upload api"""
+    def setUp(self):
+        self.client = APIClient()
+        self.user = get_user_model().objects.create_user(
+            'user@example.com',
+            'pass1234'
+        )
+        self.client.force_authenticate(self.user)
+        self.recipe = create_recipe(user=self.user)
+
+    def tearDown(self):
+        """teardown """
+        self.recipe.image.delete()
+
+    def test_upload_image(self):
+        """self uploading iage to a recipe"""
+
+        url = image_upload_url(self.recipe.id)
+        with tempfile.NamedTemporaryFile(suffix='.jpg') as image_file:
+            img = Image.new('RGB', (10, 10))
+            img.save(image_file, format="JPEG")
+            image_file.seek(0)
+            payload = {"image": image_file}
+            res = self.client.post(url, payload, format="multipart")
+
+        self.recipe.refresh_from_db()
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertIn('image', res.data)
+        self.assertTrue(os.path.exists(self.recipe.image.path))
+
+    def test_upload_image_bad_request(self):
+        """test upload bad image"""
+
+        url = image_upload_url(self.recipe.id)
+        payload = {"image": "notadnimahge"}
+        res = self.client.post(url, payload, format="multipart")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+
 
 
 
